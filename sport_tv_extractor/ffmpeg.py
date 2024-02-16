@@ -41,7 +41,7 @@ class FFMpeg(object):
             self.path,
             ' -frames:v 1 -qscale:v 2 -loglevel panic -hide_banner ',
             f'{str(img_dir)}/',
-            '"${i%.*}".jpeg; done;'
+            '"img-${i%.*}".jpeg; done;'
         ])
         subprocess.call(command, shell=True, executable='/bin/bash')
 
