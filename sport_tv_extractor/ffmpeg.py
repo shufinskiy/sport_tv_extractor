@@ -9,79 +9,93 @@ class FFMpeg(object):
 
     def __init__(self,
                  path: str,
-                 img_folder: str,
-                 video_folder: str,
+                 img_dir: str,
+                 video_dir: str,
                  output_name: str,
+                 device: str,
                  verbose_mode: str = '-loglevel quiet -stats',
                  rm_tmp_image: bool = True,
                  rm_tmp_video: bool = True
                  ):
         self.path = path
-        self.img_folder = img_folder
-        self.video_folder = video_folder
+        self.img_dir = img_dir
+        self.video_dir = video_dir
         self.output_name = output_name
+        self.device = device
         self.verbose = verbose_mode
         self.rm_img = rm_tmp_image
         self.rm_video = rm_tmp_video
+        self.codec = self._get_codec()
         self.num_frame = None
         self.fps = None
         self.bitrate = None
-        Path.cwd().joinpath(self.img_folder).mkdir(parents=True, exist_ok=True)
-        Path.cwd().joinpath(self.video_folder).mkdir(parents=True, exist_ok=True)
+        Path.cwd().joinpath(self.img_dir).mkdir(parents=True, exist_ok=True)
+        Path.cwd().joinpath(self.video_dir).mkdir(parents=True, exist_ok=True)
+
+    def _get_codec(self):
+        if self.device == 'cpu':
+            return ['', '-c:v libx264']
+        else:
+            return ['-c:v h264_cuvid', '-c:v h264_cuvid']
 
     def cut_frames(self) -> None:
-        command = f'ffmpeg -c:v h264_cuvid -i {self.path} -vf fps=1 -qscale:v 2 {self.verbose} {self.img_folder}/img-%02d.jpeg'
-        # command = f'ffmpeg -i {self.path} -vf fps=1 -qscale:v 2 {self.verbose} {self.img_folder}/img-%02d.jpeg'
-        self._call_subprocess(command)
+        cmd = f'ffmpeg {self.codec[0]} -i {self.path} -vf fps=1 -qscale:v 2 {self.verbose} {self.img_dir}/img-%02d.jpeg'
+        self._call_subprocess(cmd)
 
     def loop_cut_frames(self, img_dir, arr_frame: np.ndarray) -> None:
-        command = "".join([
+        cmd = "".join([
             f'arr=({" ".join([str(x) for x in arr_frame])}); '
-            'for i in "${arr[@]}"; do ffmpeg -ss "$i" -i ',
+            'for i in "${arr[@]}"; do ffmpeg ',
+            self.codec[0],
+            ' -ss "$i" -i ',
             self.path,
             ' -frames:v 1 -qscale:v 2 -loglevel panic -hide_banner ',
             f'{str(img_dir)}/',
             '"img-${i%.*}".jpeg; done;'
         ])
-        subprocess.call(command, shell=True, executable='/bin/bash')
+        subprocess.call(cmd, shell=True, executable='/bin/bash')
 
     def cut_videos(self,
                    start_time: float,
                    duration: float,
                    idx_video: int
                    ) -> None:
-        command = f'ffmpeg -c:v h264_cuvid -hwaccel cuvid -ss {start_time} -t {duration} -i {self.path} -vf "setpts=PTS-STARTPTS" -c:v h264_nvenc -b:v 5M -preset "hp" {self.verbose} -an -y {self.video_folder}/video_{idx_video}.mkv'
-        # command = f'ffmpeg -ss {start_time} -t {duration} -i {self.path} -vf "setpts=PTS-STARTPTS" -c:v libx264 -crf 27 -preset ultrafast {self.verbose} -an {self.video_folder}/video_{idx_video}.mkv'
-        self._call_subprocess(command)
+        if self.device == 'cpu':
+            cmd = f'ffmpeg -ss {start_time} -t {duration} -i {self.path} -vf "setpts=PTS-STARTPTS" {self.codec[1]} -crf 21 -preset ultrafast {self.verbose} -an {self.video_dir}/video_{idx_video}.mkv'
+        else:
+            cmd = f'ffmpeg {self.codec[1]} -hwaccel cuvid -ss {start_time} -t {duration} -i {self.path} -vf "setpts=PTS-STARTPTS" -c:v h264_nvenc -b:v 3.4M -preset "hq" {self.verbose} -an -y {self.video_dir}/video_{idx_video}.mkv'
+        self._call_subprocess(cmd)
 
     def concat_videos(self) -> None:
-        command = f'ffmpeg -f concat -safe 0 -i {self.video_folder}/file.txt -c:v copy {self.verbose} {self.output_name}'
-        self._call_subprocess(command)
+        cmd = f'ffmpeg -f concat -safe 0 -i {self.video_dir}/file.txt -c:v copy {self.verbose} {self.output_name}'
+        self._call_subprocess(cmd)
 
     def rm_tmp_files(self) -> None:
         if self.rm_img:
-            command = f'rm -rf {self.img_folder}'
-            self._call_subprocess(command)
+            cmd = f'rm -rf {self.img_dir}'
+            self._call_subprocess(cmd)
         if self.rm_video:
-            command = f'rm -rf {self.video_folder}'
-            self._call_subprocess(command)
+            cmd = f'rm -rf {self.video_dir}'
+            self._call_subprocess(cmd)
 
-    @property
     def get_num_frame(self):
         if self.num_frame is None:
             p = subprocess.Popen(['ffprobe', '-v', 'error', '-select_streams',
                                   'v:0', '-count_packets', '-show_entries',
-                                  'stream=nb_read_packets', '-of', 'csv=p=0', self.path], stdout=subprocess.PIPE)
+                                  'stream=nb_read_packets', '-of', 'csv=p=0',
+                                  self.path.replace('\ ', ' ')],
+                                 stdout=subprocess.PIPE)
             out, err = p.communicate()
             self.num_frame = int(out.decode('utf-8').strip('\n'))
         return self.num_frame
 
-    @property
     def get_fps(self):
         if self.fps is None:
             p = subprocess.Popen(['ffprobe', '-v', 'error', '-select_streams',
                                   'v:0', '-show_entries', 'stream=avg_frame_rate',
-                                  '-of', 'default=noprint_wrappers=1:nokey=1', self.path], stdout=subprocess.PIPE)
+                                  '-of', 'default=noprint_wrappers=1:nokey=1',
+                                  self.path.replace('\ ', ' ')],
+                                 stdout=subprocess.PIPE)
             out, err = p.communicate()
             self.fps = int(out.decode('utf-8').strip('\n').split('/')[0])
         return self.fps
