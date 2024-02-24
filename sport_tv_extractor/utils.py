@@ -85,15 +85,26 @@ class ExtractorDF(object):
                 duration=lambda df_: df_.end_time - df_.start_time,
                 diff_time=lambda df_: df_.start_time - df_.end_time.shift(1, fill_value=-100)
             )
-            .assign(start_time=lambda df_: [x if z <= skip_time else y for x, y, z in zip(df_.start_time.shift(1),
-                                                                                          df_.start_time,
-                                                                                          df_.diff_time)])
-            .drop_duplicates(subset=['start_time'], keep='last')
             .assign(
-                start_index=lambda df_: [np.floor(x).astype('int') for x in df_.start_time],
-                duration=lambda df_: df_.end_time - df_.start_time
+                ind=lambda df_: [idx if diff > skip_time else None for diff, idx in zip(
+                    df_.diff_time.shift(-1, fill_value=1000),
+                    df_.index
+                )]
             )
-            .drop(columns='diff_time')
+            .assign(
+                ind=lambda df_: df_.ind.bfill()
+            )
+            .groupby(['ind'], as_index=False).agg(
+                start_time=('start_time', 'min'),
+                start_index=('start_index', 'min'),
+                end_time=('end_time', 'max'),
+                end_index=('end_index', 'max'),
+            )
+            .assign(
+                duration=lambda df_: df_.end_time - df_.start_time,
+                diff_time=lambda df_: df_.start_time - df_.end_time.shift(1, fill_value=-100)
+            )
+            .drop(columns=['ind', 'diff_time'])
             .reset_index(drop=True)
         )
 
