@@ -14,6 +14,7 @@ from ffmpeg import FFMpeg
 from utils import CustomImageFolder, ExtractorDF
 
 TMP_DIR = '/home/shuf91/env/video_sport_game/package/left_right_check/'
+URL_RESNET = 'https://github.com/shufinskiy/sport_extractor_models/raw/main/models/main_camera_extractor.pt'
 
 
 class ExtractorBroadcast(object):
@@ -36,6 +37,7 @@ class ExtractorBroadcast(object):
                  device='cpu',
                  img_dir='images',
                  video_dir='video',
+                 model_dir='models',
                  high_accuracy=True,
                  rm_tmp_files=True,
                  batch_size=128,
@@ -46,6 +48,7 @@ class ExtractorBroadcast(object):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if device != 'cpu' else device
         self.img_dir = img_dir
         self.video_dir = video_dir
+        self.model_dir = model_dir
         self.high_accuracy = high_accuracy
         self.rm_files = rm_tmp_files if isinstance(rm_tmp_files, List) else [rm_tmp_files] * 2
         self.batch_size = batch_size
@@ -148,12 +151,15 @@ class ExtractorBroadcast(object):
         self.step6()
         self.ffmpeg.rm_tmp_files()
 
+    def download_model_dict(self, url=URL_RESNET, progress=False):
+        return torch.hub.load_state_dict_from_url(url=url, model_dir=self.model_dir, progress=progress)
+
     def _init_model(self):
         model = models.resnet18()
         num_ftrs = model.fc.in_features
 
         model.fc = nn.Linear(num_ftrs, 2)
-        model.load_state_dict(torch.load('/home/shuf91/env/video_sport_game/package/football_checkpoint6.pt'))
+        model.load_state_dict(self.download_model_dict())
         model.eval()
         model.to(self.device)
 
@@ -271,11 +277,12 @@ class ExtractorBroadcast(object):
 if __name__ == "__main__":
     from time import time
 
-    PATH_TO_VIDEO = '/home/shuf91/Загрузки/25.02.2024.Serie A. Milan - Atalanta.mkv'.replace(' ', '\ ')
-    # PATH_TO_VIDEO = '/home/shuf91/env/video_sport_game/package/fio_int.mkv'
+    # PATH_TO_VIDEO = '/home/shuf91/Загрузки/25.02.2024.Serie A. Milan - Atalanta.mkv'.replace(' ', '\ ')
+    PATH_TO_VIDEO = '/home/shuf91/env/video_sport_game/package/fio_int.mkv'
     IMADE_DIR = '/home/shuf91/env/video_sport_game/package/images'
     VIDEO_DIR = '/home/shuf91/env/video_sport_game/package/video'
-    OUTPUT_NAME = '/home/shuf91/env/video_sport_game/package/mil_atl.mkv'
+    OUTPUT_NAME = '/home/shuf91/env/video_sport_game/package/fio_int_filt.mkv'
+    MODEL_DIR = '/home/shuf91/env/video_sport_game/package/models'
 
     s = time()
     extractor = ExtractorBroadcast(
@@ -285,9 +292,11 @@ if __name__ == "__main__":
         skip_time=5,
         img_dir=IMADE_DIR,
         video_dir=VIDEO_DIR,
+        model_dir=MODEL_DIR,
         high_accuracy=True
     )
     extractor.main_camera_video()
+    # extractor._init_model()
     # extractor.ffmpeg.bitrate_video()
     # extractor.step1()
     # model = extractor._init_model()
