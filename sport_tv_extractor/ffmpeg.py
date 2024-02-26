@@ -63,7 +63,7 @@ class FFMpeg(object):
         if self.device == 'cpu':
             cmd = f'ffmpeg -ss {start_time} -t {duration} -i {self.path} -vf "setpts=PTS-STARTPTS" {self.codec[1]} -crf 21 -preset ultrafast {self.verbose} -an {self.video_dir}/video_{idx_video}.mkv'
         else:
-            cmd = f'ffmpeg {self.codec[1]} -hwaccel cuvid -ss {start_time} -t {duration} -i {self.path} -vf "setpts=PTS-STARTPTS" -c:v h264_nvenc -b:v 3.4M -preset "hq" {self.verbose} -an -y {self.video_dir}/video_{idx_video}.mkv'
+            cmd = f'ffmpeg {self.codec[1]} -hwaccel cuvid -ss {start_time} -t {duration} -i {self.path} -vf "setpts=PTS-STARTPTS" -c:v h264_nvenc -b:v {self.bitrate_video()}M -preset "hq" {self.verbose} -an -y {self.video_dir}/video_{idx_video}.mkv'
         self._call_subprocess(cmd)
 
     def concat_videos(self) -> None:
@@ -102,13 +102,17 @@ class FFMpeg(object):
 
     def bitrate_video(self):
         if self.bitrate is None:
-            self._call_subprocess(f'ffprobe {self.path} 2>meta_info.txt')
-            with Path('meta_info.txt').open(mode='r') as f:
-                meta = f.readlines()
-            v_bt = [re.search(r'(?<=bitrate:\s)\d+\s+.+(?=\n)', line).group() for line in meta if
-                    re.search(r'bitrate:\s+\d+\s+.+(?=\n)', line) is not None]
-            a_bt = [re.search(r'\d+ \w+\/\w+', line).group() for line in meta if
-                    re.search(r'Audio', line) is not None]
+
+            cmd = ['ffprobe', '-i', self.path.replace('\ ', ' ')]
+            pipe = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=10 ** 5)
+            meta = pipe.stderr.read().decode('utf-8').split('\n')
+            v_bt = [re.search(r'(?<=bitrate:\s)\d+\s+.+', line).group() for line in meta if
+                    re.search(r'bitrate:\s+\d+\s+.+', line) is not None]
+            try:
+                a_bt = [re.search(r'\d+ \w+\/\w+', line).group() for line in meta if
+                        re.search(r'Audio', line) is not None]
+            except AttributeError:
+                a_bt = ['0 kb/s']
 
             unit = v_bt[0].split(' ')[1]
 
