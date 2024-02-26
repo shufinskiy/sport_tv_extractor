@@ -1,5 +1,6 @@
 from pathlib import Path
 import shutil
+from typing import List
 
 import numpy as np
 # import pandas as pd
@@ -46,7 +47,7 @@ class ExtractorBroadcast(object):
         self.img_dir = img_dir
         self.video_dir = video_dir
         self.high_accuracy = high_accuracy
-        self.rm_tmp = rm_tmp_files
+        self.rm_files = rm_tmp_files if isinstance(rm_tmp_files, List) else [rm_tmp_files] * 2
         self.batch_size = batch_size
         self.ffmpeg_v = ffmpeg_verbose
         self.ffmpeg = FFMpeg(
@@ -56,8 +57,8 @@ class ExtractorBroadcast(object):
             output_name=self.output_name,
             device=self.device,
             verbose_mode=self.ffmpeg_v,
-            rm_tmp_image=self.rm_tmp,
-            rm_tmp_video=self.rm_tmp
+            rm_tmp_image=self.rm_files[0],
+            rm_tmp_video=self.rm_files[1]
         )
 
     def main_camera_video(self):
@@ -75,12 +76,7 @@ class ExtractorBroadcast(object):
         dataset = CustomImageFolder(self.img_dir, val_transforms)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=False, num_workers=8)
 
-        prediction = np.empty((len(dataset), 2))
-        for i, inputs in enumerate(dataloader):
-            with torch.set_grad_enabled(False):
-                inputs = inputs.to(self.device)
-                preds = model(inputs)
-                prediction[i * self.batch_size:(i + 1) * self.batch_size] = preds.cpu().numpy()
+        prediction = self.class_prediction(model, dataloader, shape=(len(dataset), 2))
 
         self.ffmpeg.get_fps()
         self.ffmpeg.get_num_frame()
@@ -127,7 +123,7 @@ class ExtractorBroadcast(object):
         self.ffmpeg.rm_tmp_files()
 
     def main_camera_video1(self):
-        self.step1()
+        self.ffmpeg_cut_frames()
 
         model = self._init_model()
 
@@ -172,12 +168,7 @@ class ExtractorBroadcast(object):
         dataset = CustomImageFolder(path, transformation)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=False, num_workers=8)
 
-        prediction = np.empty(len(dataset), )
-        for i, inputs in enumerate(dataloader):
-            with torch.set_grad_enabled(False):
-                inputs = inputs.to(self.device)
-                preds = model(inputs)
-                prediction[i * self.batch_size:(i + 1) * self.batch_size] = preds.cpu().argmax(dim=1)
+        prediction = self.class_prediction(model, dataloader, shape=len(dataset))
         shutil.rmtree(path)
         return prediction
 
@@ -203,7 +194,18 @@ class ExtractorBroadcast(object):
                                  for i, t in enumerate(step_frames)])
         return self.step_frames(step_frames, model, transformation, side, tmp_dir)
 
-    def step1(self):
+    def class_prediction(self, model, dataloader, shape):
+        prediction = np.empty(shape)
+        for i, inputs in enumerate(dataloader):
+            with torch.set_grad_enabled(False):
+                inputs = inputs.to(self.device)
+                preds = model(inputs).cpu()
+                preds = preds.argmax(dim=1) if isinstance(shape, int) else preds.numpy()
+                prediction[i * self.batch_size:(i + 1) * self.batch_size] = preds
+
+        return prediction
+
+    def ffmpeg_cut_frames(self):
         self.ffmpeg.cut_frames()
 
     def step2(self, model, transforms):
@@ -269,22 +271,24 @@ class ExtractorBroadcast(object):
 if __name__ == "__main__":
     from time import time
 
-    PATH_TO_VIDEO = '/home/shuf91/Загрузки/20.02.2024.ChLeague.Inter Milan - Club Atletico de Madrid.mkv'.replace(' ', '\ ')
+    PATH_TO_VIDEO = '/home/shuf91/Загрузки/25.02.2024.Serie A. Milan - Atalanta.mkv'.replace(' ', '\ ')
+    # PATH_TO_VIDEO = '/home/shuf91/env/video_sport_game/package/fio_int.mkv'
     IMADE_DIR = '/home/shuf91/env/video_sport_game/package/images'
     VIDEO_DIR = '/home/shuf91/env/video_sport_game/package/video'
-    OUTPUT_NAME = '/home/shuf91/env/video_sport_game/package/int_atm_1.mkv'
+    OUTPUT_NAME = '/home/shuf91/env/video_sport_game/package/mil_atl.mkv'
 
     s = time()
     extractor = ExtractorBroadcast(
         path=PATH_TO_VIDEO,
         output_name=OUTPUT_NAME,
         device='cuda',
-        skip_time=1,
+        skip_time=5,
         img_dir=IMADE_DIR,
         video_dir=VIDEO_DIR,
         high_accuracy=True
     )
     extractor.main_camera_video()
+    # extractor.ffmpeg.bitrate_video()
     # extractor.step1()
     # model = extractor._init_model()
     # val_transforms = transforms.Compose([
