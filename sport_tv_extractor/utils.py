@@ -26,21 +26,17 @@ class CustomImageFolder(Dataset):
 
 class ExtractorDF(object):
 
-    def __init__(self, prediction, paths):
+    def __init__(self, prediction):
         self.prediction = prediction
-        self.paths = paths
         self.df = (
             pd.DataFrame(softmax(self.prediction, axis=1), columns=['mark_0', 'mark_1'])
-            .assign(path=self.paths)
         )
 
     def img_classification_df(self, fps: int) -> None:
         self.df = (
             self.df
-            .loc[:, ['path', 'mark_0', 'mark_1']]
             .assign(mark=self.prediction.argmax(axis=1))
-            .assign(sec=lambda df_: [int(str(x).split('-')[1].rstrip('.jpeg')) for x in df_.path])
-            .assign(real_time=lambda df_: [x - 1 + 24 / fps for x in df_.sec])
+            .assign(real_time=lambda df_: np.arange(self.prediction.shape[0]) + (24 / fps))
             .assign(
                 prev_value=lambda df_: df_.mark.shift(1, fill_value=1),
                 next_value=lambda df_: df_.mark.shift(-1, fill_value=1)
