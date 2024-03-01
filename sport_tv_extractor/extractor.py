@@ -3,7 +3,6 @@ import shutil
 from typing import List
 
 import numpy as np
-# import pandas as pd
 
 import torch
 from torch.utils.data import Dataset
@@ -65,9 +64,8 @@ class ExtractorBroadcast(object):
         )
 
     def main_camera_video(self):
-        self.ffmpeg.cut_frames()
 
-        model = self._init_model()
+        model = self.init_model()
 
         val_transforms = transforms.Compose([
             transforms.Resize((224, 224)),
@@ -76,84 +74,28 @@ class ExtractorBroadcast(object):
                                  std=[0.229, 0.224, 0.225])
         ])
 
-        dataset = CustomImageFolder(self.img_dir, val_transforms)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=False, num_workers=8)
-
-        prediction = self.class_prediction(model, dataloader, shape=(len(dataset), 2))
+        self.ffmpeg.cut_frames()
+        prediction = self.classification_images(model, val_transforms)
 
         self.ffmpeg.get_fps()
         self.ffmpeg.get_num_frame()
 
-        data = ExtractorDF(prediction)
-        data.img_classification_df(self.ffmpeg.fps)
-        data.main_camera_parts(self.skip_time)
+        data = self.create_time_information(prediction)
 
         if self.high_accuracy:
-
-            frames = np.array([24 + (self.ffmpeg.fps * i) for i in
-                               range(np.floor(self.ffmpeg.num_frame / self.ffmpeg.fps).astype(np.int16))])
-
-            st_fr = data.df.start_index.tolist()
-            st_frames = np.array([frames[idx] for idx in st_fr])
-            left_frames = np.clip(
-                np.array([np.arange(st_frame - self.ffmpeg.fps + 1, st_frame) for st_frame in st_frames]),
-                a_min=0,
-                a_max=self.ffmpeg.num_frame - (100 / self.ffmpeg.fps)
-            )
-
-            end_fr = data.df.end_index.tolist()
-            end_frames = np.array([frames[idx] for idx in end_fr])
-            right_frames = np.clip(
-                np.array([np.arange(st_frame + 1, st_frame + self.ffmpeg.fps) for st_frame in end_frames]),
-                a_min=0,
-                a_max=self.ffmpeg.num_frame - (100 / self.ffmpeg.fps)
-            )
-
-            new_time = self.step_frames(left_frames, right_frames, model, val_transforms)
-
-            data.upd_main_camera(new_time[::2], new_time[1::2])
+            self.time_high_accuracy(data, model, val_transforms)
 
         for i, row in enumerate(data.df.itertuples()):
-            self.ffmpeg.cut_videos(row.start_time, row.duration, i)
-
-        with open(f'{self.video_dir}/file.txt', 'w', encoding='utf-8') as f:
-            for i in range(data.df.shape[0]):
-                f.write(f"file 'video_{i}.mkv'\n")
+            self.ffmpeg_cut_videos(i, row, data)
 
         self.ffmpeg.concat_videos()
 
         self.ffmpeg.rm_tmp_files()
 
-    def main_camera_video1(self):
-        self.ffmpeg_cut_frames()
-
-        model = self._init_model()
-
-        val_transforms = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
-        ])
-
-        prediction, paths = self.step2(model, val_transforms)
-
-        self.ffmpeg.get_fps()
-        self.ffmpeg.get_num_frame()
-
-        data = self.step3(prediction, paths)
-
-        if self.high_accuracy:
-            data = self.step4(data, model, val_transforms)
-
-        self.step5(data)
-        self.step6()
-        self.ffmpeg.rm_tmp_files()
-
     def download_model_dict(self, url=URL_RESNET, progress=False):
         return torch.hub.load_state_dict_from_url(url=url, model_dir=self.model_dir, progress=progress)
 
-    def _init_model(self):
+    def init_model(self):
         model = models.resnet18()
         num_ftrs = model.fc.in_features
 
@@ -227,31 +169,22 @@ class ExtractorBroadcast(object):
 
         return prediction
 
-    def ffmpeg_cut_frames(self):
-        self.ffmpeg.cut_frames()
-
-    def step2(self, model, transforms):
-
-        dataset = CustomImageFolder(self.img_dir, transforms)
+    def classification_images(self, model, transformation):
+        dataset = CustomImageFolder(self.img_dir, transformation)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=False, num_workers=8)
 
-        prediction = np.empty((len(dataset), 2))
-        for i, inputs in enumerate(dataloader):
-            with torch.set_grad_enabled(False):
-                inputs = inputs.to(self.device)
-                preds = model(inputs)
-                prediction[i * self.batch_size:(i + 1) * self.batch_size] = preds.cpu().numpy()
+        prediction = self.class_prediction(model, dataloader, shape=(len(dataset), 2))
 
-        return prediction, dataset.paths
+        return prediction
 
-    def step3(self, prediction):
+    def create_time_information(self, prediction):
         data = ExtractorDF(prediction)
         data.img_classification_df(self.ffmpeg.fps)
         data.main_camera_parts(self.skip_time)
 
         return data
 
-    def step4(self, data, model, transforms):
+    def time_high_accuracy(self, data, model, transformation):
         frames = np.array([24 + (self.ffmpeg.fps * i) for i in
                            range(np.floor(self.ffmpeg.num_frame / self.ffmpeg.fps).astype(np.int16))])
 
@@ -271,23 +204,18 @@ class ExtractorBroadcast(object):
             a_max=self.ffmpeg.num_frame - (100 / self.ffmpeg.fps)
         )
 
-        new_start_time = self.step_frames(left_frames, model, transforms, side='left')
-        new_end_time = self.step_frames(right_frames, model, transforms, side='right')
+        new_time = self.step_frames(left_frames, right_frames, model, transformation)
 
-        data.upd_main_camera(new_start_time, new_end_time)
+        data.upd_main_camera(new_time[::2], new_time[1::2])
 
         return data
 
-    def step5(self, data):
-        for i, row in enumerate(data.df.itertuples()):
-            self.ffmpeg.cut_videos(row.start_time, row.duration, i)
+    def ffmpeg_cut_videos(self, i, row, data):
+        self.ffmpeg.cut_videos(row.start_time, row.duration, i)
 
-        with open(f'{self.video_dir}/file.txt', 'w', encoding='utf-8') as f:
+        with open(f'{self.video_dir}/file.txt', 'w', encoding='utf-8') as file_desc:
             for i in range(data.df.shape[0]):
-                f.write(f"file 'video_{i}.mkv'\n")
-
-    def step6(self):
-        self.ffmpeg.concat_videos()
+                file_desc.write(f"file 'video_{i}.mkv'\n")
 
 
 if __name__ == "__main__":
