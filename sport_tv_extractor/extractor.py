@@ -1,7 +1,6 @@
 from pathlib import Path
 import shutil
 from typing import List
-import subprocess as sp
 
 import numpy as np
 # import pandas as pd
@@ -110,10 +109,9 @@ class ExtractorBroadcast(object):
                 a_max=self.ffmpeg.num_frame - (100 / self.ffmpeg.fps)
             )
 
-            new_start_time = self.step_frames(left_frames, model, val_transforms, side='left')
-            new_end_time = self.step_frames(right_frames, model, val_transforms, side='right')
+            new_time = self.step_frames(left_frames, right_frames, model, val_transforms)
 
-            data.upd_main_camera(new_start_time, new_end_time)
+            data.upd_main_camera(new_time[::2], new_time[1::2])
 
         for i, row in enumerate(data.df.itertuples()):
             self.ffmpeg.cut_videos(row.start_time, row.duration, i)
@@ -179,27 +177,44 @@ class ExtractorBroadcast(object):
         shutil.rmtree(path)
         return prediction
 
-    def step_frames(self, step_frames, model, transformation, side, tmp_dir=TMP_DIR):
+    def step_frames(self, left_frames, right_frames, model, transformation, tmp_dir=TMP_DIR):
 
-        if step_frames.shape[1] == 1:
-            for_pred = step_frames.reshape(-1, ) / self.ffmpeg.fps
+        if (left_frames.shape[1] == 1) and (right_frames.shape[1] == 1):
+            for_pred_left = left_frames.reshape(-1, ) / self.ffmpeg.fps
+            for_pred_right = right_frames.reshape(-1, ) / self.ffmpeg.fps
+            for_pred = np.sort(np.concatenate((for_pred_left, for_pred_right)))
+
             prediction = self.prediction_image(for_pred, model, transformation, tmp_dir)
 
-            next_frame = 1 if side == 'left' else -1
-            final_frame = np.array(
-                [t if prediction[i] == 0 else t + next_frame for i, t in enumerate(step_frames.reshape(-1, ))])
-            return final_frame / self.ffmpeg.fps
-        m = step_frames.shape[1] // 2
+            left_pred = prediction[::2]
+            right_pred = prediction[1::2]
+
+            left_frames = np.array(
+                [t if left_pred[i] == 0 else t + 1 for i, t in enumerate(left_frames.reshape(-1, ))])
+
+            right_frames = np.array(
+                [t if right_pred[i] == 0 else t - 1 for i, t in enumerate(right_frames.reshape(-1, ))])
+            return np.sort(np.concatenate((left_frames, right_frames))) / self.ffmpeg.fps
+
+        m = left_frames.shape[1] // 2
         low = m
-        high = m + 1 if step_frames.shape[1] % 2 == 1 else m
+        high = m + 1 if left_frames.shape[1] % 2 == 1 else m
 
-        for_pred = step_frames[:, m] / self.ffmpeg.fps
+        for_pred_left = left_frames[:, m] / self.ffmpeg.fps
+        for_pred_right = right_frames[:, m] / self.ffmpeg.fps
+        for_pred = np.sort(np.concatenate((for_pred_left, for_pred_right)))
+
         prediction = self.prediction_image(for_pred, model, transformation, tmp_dir)
-        check_class = 0 if side == 'left' else 1
+        left_pred = prediction[::2]
+        right_pred = prediction[1::2]
 
-        step_frames = np.vstack([t[:low] if prediction[i] == check_class else t[high:]
-                                 for i, t in enumerate(step_frames)])
-        return self.step_frames(step_frames, model, transformation, side, tmp_dir)
+        left_frames = np.vstack([t[:low] if left_pred[i] == 0 else t[high:]
+                                 for i, t in enumerate(left_frames)])
+
+        right_frames = np.vstack([t[:low] if right_pred[i] == 1 else t[high:]
+                                  for i, t in enumerate(right_frames)])
+
+        return self.step_frames(left_frames, right_frames, model, transformation, tmp_dir)
 
     def class_prediction(self, model, dataloader, shape):
         prediction = np.empty(shape)
@@ -275,105 +290,6 @@ class ExtractorBroadcast(object):
         self.ffmpeg.concat_videos()
 
 
-class BufferExtractorBroadcast(ExtractorBroadcast):
-
-    def __init__(self,
-                 path,
-                 output_name,
-                 skip_time=1,
-                 device='cpu',
-                 img_dir='images',
-                 video_dir='video',
-                 model_dir='models',
-                 high_accuracy=True,
-                 rm_tmp_files=True,
-                 batch_size=128,
-                 ffmpeg_verbose='-loglevel quiet -stats'):
-        super().__init__(path=path,
-                         output_name=output_name,
-                         skip_time=skip_time,
-                         device=device,
-                         img_dir=img_dir,
-                         video_dir=video_dir,
-                         model_dir=model_dir,
-                         high_accuracy=high_accuracy,
-                         rm_tmp_files=rm_tmp_files,
-                         batch_size=batch_size,
-                         ffmpeg_verbose=ffmpeg_verbose)
-
-    def buffer_main_camera_video(self):
-        s1 = time()
-        num_frames = self.ffmpeg.get_num_frame()
-        fps = self.ffmpeg.get_fps()
-        cnt_frames = int(np.modf(num_frames / fps)[1] + (1 if np.modf(num_frames / fps)[0] > 0.5 else 0))
-        command = ['ffmpeg',
-                   '-c:v', 'h264_cuvid',
-                   '-i', self.path.replace('\ ', ' '),
-                   '-vf', 'fps=1, scale=224:224',
-                   '-f', 'image2pipe',
-                   '-pix_fmt', 'rgb24',
-                   '-loglevel', 'error',
-                   '-hide_banner',
-                   '-vcodec', 'rawvideo',
-                   '-']
-        pipe = sp.Popen(command, stdout=sp.PIPE, bufsize=10 ** 9)
-        frames_size = 512
-
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
-        model = models.resnet18()
-        num_ftrs = model.fc.in_features
-
-        model.fc = nn.Linear(num_ftrs, 2)
-        model.load_state_dict(torch.load('/home/shuf91/env/video_sport_game/package/models/main_camera_extractor.pt'))
-        model.eval()
-        model.to(device)
-
-        prediction = np.empty((cnt_frames, 2))
-        cnt = 0
-        f1 = time()
-        print(f'Время работы подготовительной части: {f1-s1}')
-        while cnt*frames_size < cnt_frames:
-            first_dim = np.min([frames_size, cnt_frames - (cnt*frames_size)])
-            s2 = time()
-            raw_image = pipe.stdout.read(first_dim * 224 * 224 * 3)
-            if first_dim < frames_size:
-                pipe.stdout.flush()
-            f2 = time()
-            print(f'Чтение из буффера {f2-s2}')
-            s3 = time()
-            image = np.frombuffer(raw_image, dtype='uint8')
-            del raw_image
-            image = image.reshape((first_dim, 224, 224, 3))
-
-            img_tensor = torch.permute(torch.FloatTensor(image / 255), (0, 3, 1, 2))
-            del image
-
-            img_tensor[:, 0] = (img_tensor[:, 0] - 0.485) / 0.229
-            img_tensor[:, 1] = (img_tensor[:, 1] - 0.456) / 0.224
-            img_tensor[:, 2] = (img_tensor[:, 2] - 0.406) / 0.225
-
-            cnt_img = img_tensor.size()[0]
-            batch_size = 128
-            for i in range(int(np.ceil(cnt_img / batch_size))):
-                inputs = img_tensor[batch_size * i:batch_size * (i + 1)]
-                with torch.set_grad_enabled(False):
-                    inputs = inputs.to(device)
-                    preds = model(inputs).cpu().numpy()
-                    # preds = preds.argmax(dim=1)
-                    prediction[(cnt * frames_size) + (i * batch_size):(cnt * frames_size) + (i + 1) * batch_size] = preds
-            cnt += 1
-            f3 = time()
-            print(f'Остальная часть {f3-s3}')
-
-        n = np.arange(prediction.shape[0]) + 0.48
-        data = ExtractorDF(prediction)
-        data.img_classification_df(self.ffmpeg.fps)
-        data.main_camera_parts(self.skip_time)
-        print(data.df.head())
-        return prediction
-
-
 if __name__ == "__main__":
     from time import time
 
@@ -395,30 +311,6 @@ if __name__ == "__main__":
         model_dir=MODEL_DIR,
         high_accuracy=True
     )
-    # pred = extractor.buffer_main_camera_video()
     extractor.main_camera_video()
-    # extractor.ffmpeg_cut_frames()
-    # extractor._init_model()
-    # extractor.ffmpeg.bitrate_video()
-    # extractor.step1()
-    # model = extractor._init_model()
-    # val_transforms = transforms.Compose([
-    #     transforms.Resize((224, 224)),
-    #     transforms.ToTensor(),
-    #     transforms.Normalize(mean=[0.485, 0.456, 0.406],
-    #                          std=[0.229, 0.224, 0.225])
-    # ])
-    # pred, paths = extractor.step2(model, val_transforms)
-
-    # np.save('/home/shuf91/env/video_sport_game/package/pred.npy', pred)
-    # pd.Series(paths).to_csv('/home/shuf91/env/video_sport_game/package/paths.csv', index=False)
-    # pred = np.load('/home/shuf91/env/video_sport_game/package/pred.npy')
-    # paths = pd.read_csv('/home/shuf91/env/video_sport_game/package/paths.csv')
-    #
-    # extractor.ffmpeg.get_fps()
-    # extractor.ffmpeg.get_num_frame()
-    #
-    # data = extractor.step3(pred, paths)
-    # data = extractor.step4(data, model, val_transforms)
     f = time()
     print(f'{f-s}')
