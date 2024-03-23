@@ -40,7 +40,10 @@ class ExtractorBroadcast(object):
                  high_accuracy=True,
                  rm_tmp_files=True,
                  batch_size=128,
-                 ffmpeg_verbose='-loglevel quiet -stats'):
+                 ffmpeg_verbose='-loglevel quiet -stats',
+                 model=None,
+                 transformation=None,
+                 prediction=None):
         self.path = path
         self.output_name = output_name
         self.skip_time = skip_time
@@ -62,31 +65,36 @@ class ExtractorBroadcast(object):
             rm_tmp_image=self.rm_files[0],
             rm_tmp_video=self.rm_files[1]
         )
+        self.model = model
+        self.transformation = transformation
+        self.prediction = prediction
 
     def main_camera_video(self):
 
-        model = self.init_model()
+        if self.model is None:
+            self.model = self.init_model()
 
-        val_transforms = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
-        ])
+        if self.transformation is None:
+            self.transformation = transforms.Compose([
+                transforms.Resize((224, 224)),
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                                     std=[0.229, 0.224, 0.225])
+            ])
 
-        self.ffmpeg.cut_frames()
-        prediction = self.classification_images(model, val_transforms)
+        if self.prediction is None:
+            self.ffmpeg.cut_frames()
+            self.prediction = self.classification_images(self.model, self.transformation)
 
         self.ffmpeg.get_fps()
         self.ffmpeg.get_num_frame()
 
-        data = self.create_time_information(prediction)
+        data = self.create_time_information(self.prediction)
 
         if self.high_accuracy:
-            self.time_high_accuracy(data, model, val_transforms)
+            self.time_high_accuracy(data, self.model, self.transformation)
 
-        for i, row in enumerate(data.df.itertuples()):
-            self.ffmpeg_cut_videos(i, row, data)
+        self.ffmpeg_cut_videos(data)
 
         self.ffmpeg.concat_videos()
 
@@ -159,6 +167,16 @@ class ExtractorBroadcast(object):
         return self.step_frames(left_frames, right_frames, model, transformation, tmp_dir)
 
     def class_prediction(self, model, dataloader, shape):
+        """
+        
+        Args:
+            model:
+            dataloader:
+            shape:
+
+        Returns:
+
+        """
         prediction = np.empty(shape)
         for i, inputs in enumerate(dataloader):
             with torch.set_grad_enabled(False):
@@ -169,7 +187,16 @@ class ExtractorBroadcast(object):
 
         return prediction
 
-    def classification_images(self, model, transformation):
+    def classification_images(self, model, transformation) -> np.ndarray:
+        """
+
+        Args:
+            model:
+            transformation:
+
+        Returns:
+
+        """
         dataset = CustomImageFolder(self.img_dir, transformation)
         dataloader = torch.utils.data.DataLoader(dataset, batch_size=self.batch_size, shuffle=False, num_workers=8)
 
@@ -177,14 +204,32 @@ class ExtractorBroadcast(object):
 
         return prediction
 
-    def create_time_information(self, prediction):
+    def create_time_information(self, prediction: np.ndarray) -> ExtractorDF:
+        """
+
+        Args:
+            prediction:
+
+        Returns:
+
+        """
         data = ExtractorDF(prediction)
         data.img_classification_df(self.ffmpeg.fps)
         data.main_camera_parts(self.skip_time)
 
         return data
 
-    def time_high_accuracy(self, data, model, transformation):
+    def time_high_accuracy(self, data: ExtractorDF, model, transformation) -> ExtractorDF:
+        """
+
+        Args:
+            data:
+            model:
+            transformation:
+
+        Returns:
+
+        """
         frames = np.array([24 + (self.ffmpeg.fps * i) for i in
                            range(np.floor(self.ffmpeg.num_frame / self.ffmpeg.fps).astype(np.int16))])
 
@@ -210,8 +255,17 @@ class ExtractorBroadcast(object):
 
         return data
 
-    def ffmpeg_cut_videos(self, i, row, data):
-        self.ffmpeg.cut_videos(row.start_time, row.duration, i)
+    def ffmpeg_cut_videos(self, data: ExtractorDF) -> None:
+        """
+
+        Args:
+            data:
+
+        Returns:
+
+        """
+        for i, row in enumerate(data.df.itertuples()):
+            self.ffmpeg.cut_videos(row.start_time, row.duration, i)
 
         with open(f'{self.video_dir}/file.txt', 'w', encoding='utf-8') as file_desc:
             for i in range(data.df.shape[0]):
@@ -221,14 +275,15 @@ class ExtractorBroadcast(object):
 if __name__ == "__main__":
     from time import time
 
-    # PATH_TO_VIDEO = '/home/shuf91/Загрузки/25.02.2024.Serie A. Milan - Atalanta.mkv'.replace(' ', '\ ')
-    PATH_TO_VIDEO = '/home/shuf91/env/video_sport_game/package/fio_int.mkv'
+    PATH_TO_VIDEO = '/home/shuf91/Загрузки/20240317_FA_CUP_23.24_QF_MUN_vs_LIV_[rgfootball.net]_720p.50.mkv'.replace(' ', '\ ')
+    # PATH_TO_VIDEO = '/home/shuf91/env/video_sport_game/package/fio_int.mkv'
     IMADE_DIR = '/home/shuf91/env/video_sport_game/package/images'
     VIDEO_DIR = '/home/shuf91/env/video_sport_game/package/video'
-    OUTPUT_NAME = '/home/shuf91/env/video_sport_game/package/fio_int_filt.mkv'
+    OUTPUT_NAME = '/home/shuf91/env/video_sport_game/package/mu_liv.mkv'
     MODEL_DIR = '/home/shuf91/env/video_sport_game/package/models'
 
     s = time()
+
     extractor = ExtractorBroadcast(
         path=PATH_TO_VIDEO,
         output_name=OUTPUT_NAME,
@@ -238,6 +293,7 @@ if __name__ == "__main__":
         video_dir=VIDEO_DIR,
         model_dir=MODEL_DIR,
         high_accuracy=True
+        # prediction=np.load('/home/shuf91/env/video_sport_game/package/prediction.npy')
     )
     extractor.main_camera_video()
     f = time()
