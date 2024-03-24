@@ -1,6 +1,6 @@
 from pathlib import Path
 import shutil
-from typing import List
+from typing import List, Optional, Dict, Any, Union, Callable, Tuple
 
 import numpy as np
 
@@ -25,25 +25,32 @@ class ExtractorBroadcast(object):
         device
         img_dir
         video_dir
-        rm_tmp
+        model_dir
+        high_accuracy
+        rm_files
+        batch_size
         ffmpeg_v
+        ffmpeg
+        model
+        transformation
+        prediction
     """
 
     def __init__(self,
-                 path,
-                 output_name,
-                 skip_time=1,
-                 device='cpu',
-                 img_dir='images',
-                 video_dir='video',
-                 model_dir='models',
-                 high_accuracy=True,
-                 rm_tmp_files=True,
-                 batch_size=128,
-                 ffmpeg_verbose='-loglevel quiet -stats',
-                 model=None,
-                 transformation=None,
-                 prediction=None):
+                 path: str,
+                 output_name: str,
+                 skip_time: int = 1,
+                 device: str = 'cpu',
+                 img_dir: str = 'images',
+                 video_dir: str = 'video',
+                 model_dir: str = 'models',
+                 high_accuracy: bool = True,
+                 rm_tmp_files: bool = True,
+                 batch_size: int = 128,
+                 ffmpeg_verbose: str = '-loglevel quiet -stats',
+                 model: Optional[models.ResNet] = None,
+                 transformation: Optional[transforms.Compose] = None,
+                 prediction: Optional[np.ndarray] = None):
         self.path = path
         self.output_name = output_name
         self.skip_time = skip_time
@@ -69,7 +76,12 @@ class ExtractorBroadcast(object):
         self.transformation = transformation
         self.prediction = prediction
 
-    def main_camera_video(self):
+    def main_camera_video(self) -> None:
+        """
+
+        Returns:
+
+        """
 
         if self.model is None:
             self.model = self.init_model()
@@ -100,10 +112,24 @@ class ExtractorBroadcast(object):
 
         self.ffmpeg.rm_tmp_files()
 
-    def download_model_dict(self, url=URL_RESNET, progress=False):
+    def download_model_dict(self, url: str = URL_RESNET, progress: bool = False) -> Dict[str, Any]:
+        """
+
+        Args:
+            url:
+            progress:
+
+        Returns:
+
+        """
         return torch.hub.load_state_dict_from_url(url=url, model_dir=self.model_dir, progress=progress)
 
-    def init_model(self):
+    def init_model(self) -> models.ResNet:
+        """
+
+        Returns:
+
+        """
         model = models.resnet18()
         num_ftrs = model.fc.in_features
 
@@ -114,7 +140,22 @@ class ExtractorBroadcast(object):
 
         return model
 
-    def prediction_image(self, for_pred, model, transformation, tmp_dir=TMP_DIR):
+    def prediction_image(self,
+                         for_pred: np.ndarray,
+                         model: models.ResNet,
+                         transformation: transforms.Compose,
+                         tmp_dir: str = TMP_DIR) -> np.ndarray:
+        """
+
+        Args:
+            for_pred:
+            model:
+            transformation:
+            tmp_dir:
+
+        Returns:
+
+        """
         path = Path(tmp_dir)
         path.mkdir(parents=True, exist_ok=True)
 
@@ -127,7 +168,24 @@ class ExtractorBroadcast(object):
         shutil.rmtree(path)
         return prediction
 
-    def step_frames(self, left_frames, right_frames, model, transformation, tmp_dir=TMP_DIR):
+    def step_frames(self,
+                    left_frames: np.ndarray,
+                    right_frames: np.ndarray,
+                    model: models.ResNet,
+                    transformation: transforms.Compose,
+                    tmp_dir: str = TMP_DIR) -> Union[np.ndarray, Callable]:
+        """
+
+        Args:
+            left_frames:
+            right_frames:
+            model:
+            transformation:
+            tmp_dir:
+
+        Returns:
+
+        """
 
         if (left_frames.shape[1] == 1) and (right_frames.shape[1] == 1):
             for_pred_left = left_frames.reshape(-1, ) / self.ffmpeg.fps
@@ -166,9 +224,12 @@ class ExtractorBroadcast(object):
 
         return self.step_frames(left_frames, right_frames, model, transformation, tmp_dir)
 
-    def class_prediction(self, model, dataloader, shape):
+    def class_prediction(self,
+                         model: models.ResNet,
+                         dataloader: torch.utils.data.DataLoader,
+                         shape: Union[int, Tuple[int, int]]) -> np.ndarray:
         """
-        
+
         Args:
             model:
             dataloader:
@@ -187,7 +248,9 @@ class ExtractorBroadcast(object):
 
         return prediction
 
-    def classification_images(self, model, transformation) -> np.ndarray:
+    def classification_images(self,
+                              model: models.ResNet,
+                              transformation: transforms.Compose) -> np.ndarray:
         """
 
         Args:
@@ -219,7 +282,10 @@ class ExtractorBroadcast(object):
 
         return data
 
-    def time_high_accuracy(self, data: ExtractorDF, model, transformation) -> ExtractorDF:
+    def time_high_accuracy(self,
+                           data: ExtractorDF,
+                           model: models.ResNet,
+                           transformation: transforms.Compose) -> ExtractorDF:
         """
 
         Args:
@@ -270,31 +336,3 @@ class ExtractorBroadcast(object):
         with open(f'{self.video_dir}/file.txt', 'w', encoding='utf-8') as file_desc:
             for i in range(data.df.shape[0]):
                 file_desc.write(f"file 'video_{i}.mkv'\n")
-
-
-if __name__ == "__main__":
-    from time import time
-
-    PATH_TO_VIDEO = '/home/shuf91/Загрузки/20240317_FA_CUP_23.24_QF_MUN_vs_LIV_[rgfootball.net]_720p.50.mkv'.replace(' ', '\ ')
-    # PATH_TO_VIDEO = '/home/shuf91/env/video_sport_game/package/fio_int.mkv'
-    IMADE_DIR = '/home/shuf91/env/video_sport_game/package/images'
-    VIDEO_DIR = '/home/shuf91/env/video_sport_game/package/video'
-    OUTPUT_NAME = '/home/shuf91/env/video_sport_game/package/mu_liv.mkv'
-    MODEL_DIR = '/home/shuf91/env/video_sport_game/package/models'
-
-    s = time()
-
-    extractor = ExtractorBroadcast(
-        path=PATH_TO_VIDEO,
-        output_name=OUTPUT_NAME,
-        device='cuda',
-        skip_time=5,
-        img_dir=IMADE_DIR,
-        video_dir=VIDEO_DIR,
-        model_dir=MODEL_DIR,
-        high_accuracy=True
-        # prediction=np.load('/home/shuf91/env/video_sport_game/package/prediction.npy')
-    )
-    extractor.main_camera_video()
-    f = time()
-    print(f'{f-s}')
