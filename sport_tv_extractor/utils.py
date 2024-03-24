@@ -1,16 +1,25 @@
 from pathlib import Path
+from typing import Union, Optional
 
 import numpy as np
 import pandas as pd
 from scipy.special import softmax
 from PIL import Image
 from torch.utils.data import Dataset
+from torchvision import transforms
 
 
 class CustomImageFolder(Dataset):
+    """
+    Attributes:
+        paths
+        transform
+    """
 
-    def __init__(self, paths, transform=None):
-        self.paths = sorted(list(Path(paths).iterdir()), key=lambda x: int(x.stem.split('-')[1]))
+    def __init__(self,
+                 path: Union[str, Path],
+                 transform: Optional[transforms] = None):
+        self.paths = sorted(list(Path(path).iterdir()), key=lambda x: int(x.stem.split('-')[1]))
         self.transform = transform
 
     def __len__(self):
@@ -25,14 +34,26 @@ class CustomImageFolder(Dataset):
 
 
 class ExtractorDF(object):
+    """
+    Attributes:
+        prediction
+    """
 
-    def __init__(self, prediction):
+    def __init__(self, prediction: np.ndarray):
         self.prediction = prediction
         self.df = (
             pd.DataFrame(softmax(self.prediction, axis=1), columns=['mark_0', 'mark_1'])
         )
 
     def img_classification_df(self, fps: int) -> None:
+        """
+
+        Args:
+            fps:
+
+        Returns:
+
+        """
         self.df = (
             self.df
             .assign(mark=self.prediction.argmax(axis=1))
@@ -44,6 +65,14 @@ class ExtractorDF(object):
         )
 
     def main_camera_parts(self, skip_time: int) -> None:
+        """
+
+        Args:
+            skip_time:
+
+        Returns:
+
+        """
         df = (
             self.df
             .reset_index()
@@ -104,7 +133,18 @@ class ExtractorDF(object):
             .reset_index(drop=True)
         )
 
-    def upd_main_camera(self, new_start_time, new_end_time) -> None:
+    def upd_main_camera(self,
+                        new_start_time: np.ndarray,
+                        new_end_time: np.ndarray) -> None:
+        """
+
+        Args:
+            new_start_time:
+            new_end_time:
+
+        Returns:
+
+        """
         self.df = (
             self.df
             .assign(
