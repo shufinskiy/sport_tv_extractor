@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Union, Optional
+from typing import Union, Optional, List
 
 import numpy as np
 import pandas as pd
@@ -10,15 +10,18 @@ from torchvision import transforms
 
 
 class CustomImageFolder(Dataset):
-    """
+    """Class for loading images
+
+    This class loads images obtained from a video file after the method is working FFMpeg.cut_frames
+
     Attributes:
-        paths
-        transform
+        paths List: List of paths to images
+        transform Optional[transforms]: Transformations for images, if they are needed (default None)
     """
 
     def __init__(self,
                  path: Union[str, Path],
-                 transform: Optional[transforms] = None):
+                 transform: Optional[transforms.Compose] = None):
         self.paths = sorted(list(Path(path).iterdir()), key=lambda x: int(x.stem.split('-')[1]))
         self.transform = transform
 
