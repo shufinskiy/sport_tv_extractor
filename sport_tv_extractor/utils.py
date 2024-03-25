@@ -10,7 +10,7 @@ from torchvision import transforms
 
 
 class CustomImageFolder(Dataset):
-    """Class for loading images
+    """A class for loading images
 
     This class loads images obtained from a video file after the method is working FFMpeg.cut_frames
 
@@ -37,9 +37,15 @@ class CustomImageFolder(Dataset):
 
 
 class ExtractorDF(object):
-    """
+    """A class for creating a data frame with classification results.
+
+    A class creates a table based on image classification results,
+    calculates the beginning, end, and duration of fragments from
+    the main and other cameras, and leaves only data about fragments
+    from the main camera.
+
     Attributes:
-        prediction
+        prediction np.ndarray: array of class probabilities
     """
 
     def __init__(self, prediction: np.ndarray):
@@ -49,13 +55,13 @@ class ExtractorDF(object):
         )
 
     def img_classification_df(self, fps: int) -> None:
-        """
+        """Adding time and lag/lead mark information in dataframe
 
         Args:
-            fps:
+            fps int: frame per second
 
         Returns:
-
+            None
         """
         self.df = (
             self.df
@@ -68,13 +74,20 @@ class ExtractorDF(object):
         )
 
     def main_camera_parts(self, skip_time: int) -> None:
-        """
+        """Creating a table with data about fragments from the main camera
+
+        The method finds continuous chains of images from the main camera
+        and combines them into fragments, adding information about their
+        beginning and ending. Information about fragments from other cameras
+        is deleted. It remains if the fragment from the other camera is
+        less than skip_time.
 
         Args:
-            skip_time:
+            skip_time int: Time in seconds. For a fragment from other cameras
+            to be preserved, it must be less than skip_time
 
         Returns:
-
+            None
         """
         df = (
             self.df
@@ -139,14 +152,14 @@ class ExtractorDF(object):
     def upd_main_camera(self,
                         new_start_time: np.ndarray,
                         new_end_time: np.ndarray) -> None:
-        """
+        """Update timestamps start and end video from main camera
 
         Args:
-            new_start_time:
-            new_end_time:
+            new_start_time np.ndarray: new timestamps of the beginning of fragments from the main camera
+            new_end_time np.ndarray: new timestamps of the ending of fragments from the main camera
 
         Returns:
-
+            None
         """
         self.df = (
             self.df
