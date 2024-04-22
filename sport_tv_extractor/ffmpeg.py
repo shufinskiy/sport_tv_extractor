@@ -7,20 +7,26 @@ import numpy as np
 
 
 class FFMpeg(object):
-    """
+    """ Class for work with ffmpeg
+
+    The class allows you to process video using ffmpeg calls:
+    1. Get frames
+    2. Cut video clips
+    3. Concat video clips into one video
+
     Attributes:
-        path
-        img_dir
-        video_dir
-        output_name
-        device
-        verbose
-        rm_img
-        rm_video
-        codec
-        num_frame
-        fps
-        bitrate
+        path str: Path to video
+        img_dir str: Folder, where need to save frames video
+        video_dir str: Folder, where need to save video clips
+        output_name str: Name for output file
+        device str: Device on which must make video processing: CPU or CUDA(GPU)
+        verbose str: Level verbose for ffmpeg calls
+        rm_img bool: Delete temporary frames?
+        rm_video bool: Delete temporary video clips?
+        codec List[str]:
+        num_frame Optional[int]:
+        fps Optional[int]:
+        bitrate Optional[float]: 
     """
 
     def __init__(self,
@@ -65,7 +71,7 @@ class FFMpeg(object):
         Returns:
 
         """
-        cmd = f'ffmpeg {self.codec[0]} -i {self.path} -vf fps=1 -qscale:v 2 {self.verbose} {self.img_dir}/img-%02d.jpeg'
+        cmd = f'ffmpeg {self.codec[0]} -i {self.path} -vf "fps=1, scale=224:224" -qscale:v 2 {self.verbose} {self.img_dir}/img-%02d.jpeg'
         self._call_sp(cmd)
 
     def loop_cut_frames(self, img_dir: str, arr_frame: np.ndarray) -> None:
