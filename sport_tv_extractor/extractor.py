@@ -18,22 +18,27 @@ URL_RESNET = 'https://github.com/shufinskiy/sport_extractor_models/raw/main/mode
 
 class ExtractorBroadcast(object):
     """
+    A class for creating filtered videos
+
+    This class allows you to make a video from a raw video broadcast
+    of a football match, in which non-game moments will be absent.
+
     Attributes:
-        path
-        output_name
-        skip_time
-        device
-        img_dir
-        video_dir
-        model_dir
-        high_accuracy
-        rm_files
-        batch_size
-        ffmpeg_v
-        ffmpeg
-        model
-        transformation
-        prediction
+        path str: Path to video
+        output_name str: Name for output file
+        skip_time int:
+        device str: Device on which must make video processing: CPU or CUDA(GPU)
+        img_dir str: Folder, where need to save frames video
+        video_dir str: Folder, where need to save video clips
+        model_dir str: Folder, where save model for classification images
+        high_accuracy bool: Do I need to find a certain frame of transition between classes?
+        rm_files list: list of bool value
+        batch_size int: Batch size images for model
+        ffmpeg_v str: Level verbose for ffmpeg calls
+        ffmpeg FFMpeg: class FFMPeg for working with video
+        model Optional[models.ResNet]: Model for classification images
+        transformation Optional[transforms.Compose]: Transformations for images before passing to the model
+        prediction Optional[np.ndarray]: An array predictions of model
     """
 
     def __init__(self,
@@ -126,8 +131,10 @@ class ExtractorBroadcast(object):
 
     def init_model(self) -> models.ResNet:
         """
+        Initialization model for classification
 
         Returns:
+            models.ResNet: model for classification
 
         """
         model = models.resnet18()
