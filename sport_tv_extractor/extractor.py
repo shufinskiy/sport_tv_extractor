@@ -245,6 +245,7 @@ class ExtractorBroadcast(object):
 
         return self.step_frames(left_frames, right_frames, model, transformation, tmp_dir)
 
+    @time_complete(text="Классификация кадров: ")
     def class_prediction(self,
                          model: models.ResNet,
                          dataloader: torch.utils.data.DataLoader,
@@ -269,7 +270,7 @@ class ExtractorBroadcast(object):
 
         return prediction
 
-    @time_complete(text="Классификация кадров видео:")
+    @time_complete(text="Общее время классификации кадров видео:")
     def classification_images(self,
                               model: models.ResNet,
                               transformation: transforms.Compose) -> np.ndarray:
@@ -305,7 +306,7 @@ class ExtractorBroadcast(object):
 
         return data
 
-    @time_complete(text="Поиск кадров перехода:")
+    @time_complete(text="Общее время поиска кадров перехода:")
     def time_high_accuracy(self,
                            data: ExtractorDF,
                            model: models.ResNet,

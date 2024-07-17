@@ -86,6 +86,7 @@ class FFMpeg(object):
         cmd = f'ffmpeg {self.codec[0]} -i {self.path} -vf "fps={1/self.second_step}, scale=224:224" -qscale:v 2 {self.verbose} {self.img_dir}/img-%02d.jpeg'
         self._call_sp(cmd)
 
+    @time_complete(text="Получение кадров видео в цикле:")
     def loop_cut_frames(self, img_dir: str, arr_frame: np.ndarray) -> None:
         """
 
