@@ -93,6 +93,17 @@ class ExtractorBroadcast(object):
         self.transformation = transformation
         self.prediction = prediction
 
+    def __repr__(self):
+        return f"""ExtractorBroadcast(
+            "skip_time": {self.skip_time},
+            "second_step": {self.second_step},
+            "device": {self.device},
+            "batch_size": {self.batch_size},
+            "logging": {self.logging},
+            "recode": {self.recode},
+            "high_accuracy": {self.high_accuracy}
+        )"""
+
     @time_complete(text="Общее время работы программы:")
     def main_camera_video(self) -> None:
         """
@@ -100,6 +111,8 @@ class ExtractorBroadcast(object):
         Returns:
 
         """
+        if self.logging:
+            print(self)
 
         if self.model is None:
             self.model = self.init_model()
