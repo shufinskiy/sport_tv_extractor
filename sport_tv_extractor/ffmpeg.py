@@ -5,6 +5,8 @@ from typing import Optional, List
 
 import numpy as np
 
+from utils import time_complete
+
 
 class FFMpeg(object):
     """ Class for work with ffmpeg
@@ -36,6 +38,8 @@ class FFMpeg(object):
                  output_name: str,
                  device: str,
                  verbose_mode: str = '-loglevel quiet -stats',
+                 logging: bool = False,
+                 recode: bool = True,
                  rm_tmp_image: bool = True,
                  rm_tmp_video: bool = True
                  ):
@@ -45,6 +49,8 @@ class FFMpeg(object):
         self.output_name = output_name
         self.device = device
         self.verbose = verbose_mode
+        self.logging = logging
+        self.recode = recode
         self.rm_img = rm_tmp_image
         self.rm_video = rm_tmp_video
         self.codec: List[str] = self._get_codec()
@@ -65,6 +71,7 @@ class FFMpeg(object):
         else:
             return ['-c:v h264_cuvid', '-c:v h264_cuvid']
 
+    @time_complete(text="Получение кадров видео с шагом 1 секунда:")
     def cut_frames(self) -> None:
         """
 
@@ -100,7 +107,6 @@ class FFMpeg(object):
                    start_time: float,
                    duration: float,
                    idx_video: int,
-                   recode: bool,
                    ) -> None:
         """
 
@@ -113,7 +119,7 @@ class FFMpeg(object):
         Returns:
 
         """
-        if recode:
+        if self.recode:
             if self.device == 'cpu':
                 cmd = f'ffmpeg -ss {start_time} -t {duration} -i {self.path} -vf "setpts=PTS-STARTPTS" {self.codec[1]} -crf 21 -preset ultrafast {self.verbose} -an {self.video_dir}/video_{idx_video}.mkv'
             else:
@@ -122,6 +128,7 @@ class FFMpeg(object):
             cmd = f'ffmpeg -ss {start_time} -t {duration} -i {self.path} -c:v copy -an {self.verbose} {self.video_dir}/video_{idx_video}.mkv'
         self._call_sp(cmd)
 
+    @time_complete(text="Объединение видеофрагментов в один файл:")
     def concat_videos(self) -> None:
         """
 
@@ -144,6 +151,7 @@ class FFMpeg(object):
             cmd = f'rm -rf {self.video_dir}'
             self._call_sp(cmd)
 
+    @time_complete(text="Получение количества кадров в видео:")
     def get_num_frame(self) -> int:
         """
 
@@ -160,6 +168,7 @@ class FFMpeg(object):
             self.num_frame = int(out.decode('utf-8').strip('\n'))
         return self.num_frame
 
+    @time_complete(text="Получение FPS видео:")
     def get_fps(self) -> int:
         """
 

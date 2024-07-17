@@ -3,6 +3,7 @@ import shutil
 from typing import List, Optional, Dict, Any, Union, Callable, Tuple
 
 import numpy as np
+from loguru import logger
 
 import torch
 from torch.utils.data import Dataset
@@ -10,7 +11,7 @@ import torch.nn as nn
 from torchvision import models, transforms
 
 from ffmpeg import FFMpeg
-from utils import CustomImageFolder, ExtractorDF
+from utils import CustomImageFolder, ExtractorDF, time_complete
 
 TMP_DIR = '/home/shuf91/env/video_sport_game/package/left_right_check/'
 URL_RESNET = 'https://github.com/shufinskiy/sport_extractor_models/raw/main/models/main_camera_extractor.pt'
@@ -50,6 +51,7 @@ class ExtractorBroadcast(object):
                  img_dir: str = 'images',
                  video_dir: str = 'video',
                  model_dir: str = 'models',
+                 logging: bool = False,
                  recode: bool = True,
                  high_accuracy: bool = True,
                  rm_tmp_files: bool = True,
@@ -65,6 +67,7 @@ class ExtractorBroadcast(object):
         self.img_dir = img_dir
         self.video_dir = video_dir
         self.model_dir = model_dir
+        self.logging = logging
         self.recode = recode
         self.high_accuracy = high_accuracy
         self.rm_files = rm_tmp_files if isinstance(rm_tmp_files, List) else [rm_tmp_files] * 2
@@ -77,6 +80,8 @@ class ExtractorBroadcast(object):
             output_name=self.output_name,
             device=self.device,
             verbose_mode=self.ffmpeg_v,
+            logging=self.logging,
+            recode=self.recode,
             rm_tmp_image=self.rm_files[0],
             rm_tmp_video=self.rm_files[1]
         )
@@ -84,6 +89,7 @@ class ExtractorBroadcast(object):
         self.transformation = transformation
         self.prediction = prediction
 
+    @time_complete(text="Общее время работы программы:")
     def main_camera_video(self) -> None:
         """
 
@@ -132,6 +138,7 @@ class ExtractorBroadcast(object):
         """
         return torch.hub.load_state_dict_from_url(url=url, model_dir=self.model_dir, progress=progress)
 
+    @time_complete(text="Инициализация модели:")
     def init_model(self) -> models.ResNet:
         """
         Initialization model for classification
@@ -258,6 +265,7 @@ class ExtractorBroadcast(object):
 
         return prediction
 
+    @time_complete(text="Классификация кадров видео:")
     def classification_images(self,
                               model: models.ResNet,
                               transformation: transforms.Compose) -> np.ndarray:
@@ -277,6 +285,7 @@ class ExtractorBroadcast(object):
 
         return prediction
 
+    @time_complete(text="Создания таблицы видео интервалов:")
     def create_time_information(self, prediction: np.ndarray) -> ExtractorDF:
         """
 
@@ -292,6 +301,7 @@ class ExtractorBroadcast(object):
 
         return data
 
+    @time_complete(text="Поиск кадров перехода:")
     def time_high_accuracy(self,
                            data: ExtractorDF,
                            model: models.ResNet,
@@ -331,6 +341,7 @@ class ExtractorBroadcast(object):
 
         return data
 
+    @time_complete(text="Нарезка видеофрагментов:")
     def ffmpeg_cut_videos(self, data: ExtractorDF) -> None:
         """
 
@@ -342,7 +353,7 @@ class ExtractorBroadcast(object):
 
         """
         for i, row in enumerate(data.df.itertuples()):
-            self.ffmpeg.cut_videos(row.start_time, row.duration, i, self.recode)
+            self.ffmpeg.cut_videos(row.start_time, row.duration, i)
 
         with open(f'{self.video_dir}/file.txt', 'w', encoding='utf-8') as file_desc:
             for i in range(data.df.shape[0]):

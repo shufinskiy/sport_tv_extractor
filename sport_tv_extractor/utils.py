@@ -1,5 +1,7 @@
 from pathlib import Path
-from typing import Union, Optional, List
+from typing import Union, Optional
+import time
+from functools import wraps
 
 import numpy as np
 import pandas as pd
@@ -170,3 +172,19 @@ class ExtractorDF(object):
             )
             .loc[:, ['start_time', 'start_index', 'end_time', 'end_index', 'duration']]
         )
+
+
+def time_complete(text):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            if getattr(self, 'logging', False):
+                start_time = time.time()
+                result = func(self, *args, **kwargs)
+                end_time = time.time()
+                print(f"{text} {round(end_time - start_time, 3)}")
+            else:
+                result = func(self, *args, **kwargs)
+            return result
+        return wrapper
+    return decorator
