@@ -28,6 +28,7 @@ class ExtractorBroadcast(object):
         path str: Path to video
         output_name str: Name for output file
         skip_time int:
+        second_step: float
         device str: Device on which must make video processing: CPU or CUDA(GPU)
         img_dir str: Folder, where need to save frames video
         video_dir str: Folder, where need to save video clips
@@ -47,6 +48,7 @@ class ExtractorBroadcast(object):
                  path: str,
                  output_name: str,
                  skip_time: int = 1,
+                 second_step: float = 1,
                  device: str = 'cpu',
                  img_dir: str = 'images',
                  video_dir: str = 'video',
@@ -63,6 +65,7 @@ class ExtractorBroadcast(object):
         self.path = path
         self.output_name = output_name
         self.skip_time = skip_time
+        self.second_step = second_step
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if device != 'cpu' else device
         self.img_dir = img_dir
         self.video_dir = video_dir
@@ -80,6 +83,7 @@ class ExtractorBroadcast(object):
             output_name=self.output_name,
             device=self.device,
             verbose_mode=self.ffmpeg_v,
+            second_step=self.second_step,
             logging=self.logging,
             recode=self.recode,
             rm_tmp_image=self.rm_files[0],

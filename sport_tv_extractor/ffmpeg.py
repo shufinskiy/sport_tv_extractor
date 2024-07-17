@@ -18,11 +18,14 @@ class FFMpeg(object):
 
     Attributes:
         path str: Path to video
+        second_step float:
         img_dir str: Folder, where need to save frames video
         video_dir str: Folder, where need to save video clips
         output_name str: Name for output file
         device str: Device on which must make video processing: CPU or CUDA(GPU)
         verbose str: Level verbose for ffmpeg calls
+        logging bool:
+        recode bool:
         rm_img bool: Delete temporary frames?
         rm_video bool: Delete temporary video clips?
         codec List[str]:
@@ -38,6 +41,7 @@ class FFMpeg(object):
                  output_name: str,
                  device: str,
                  verbose_mode: str = '-loglevel quiet -stats',
+                 second_step: float = 1,
                  logging: bool = False,
                  recode: bool = True,
                  rm_tmp_image: bool = True,
@@ -49,6 +53,7 @@ class FFMpeg(object):
         self.output_name = output_name
         self.device = device
         self.verbose = verbose_mode
+        self.second_step = second_step
         self.logging = logging
         self.recode = recode
         self.rm_img = rm_tmp_image
@@ -78,7 +83,7 @@ class FFMpeg(object):
         Returns:
 
         """
-        cmd = f'ffmpeg {self.codec[0]} -i {self.path} -vf "fps=1, scale=224:224" -qscale:v 2 {self.verbose} {self.img_dir}/img-%02d.jpeg'
+        cmd = f'ffmpeg {self.codec[0]} -i {self.path} -vf "fps={1/self.second_step}, scale=224:224" -qscale:v 2 {self.verbose} {self.img_dir}/img-%02d.jpeg'
         self._call_sp(cmd)
 
     def loop_cut_frames(self, img_dir: str, arr_frame: np.ndarray) -> None:
