@@ -99,7 +99,8 @@ class FFMpeg(object):
     def cut_videos(self,
                    start_time: float,
                    duration: float,
-                   idx_video: int
+                   idx_video: int,
+                   recode: bool,
                    ) -> None:
         """
 
@@ -107,14 +108,18 @@ class FFMpeg(object):
             start_time:
             duration:
             idx_video:
+            recode:
 
         Returns:
 
         """
-        if self.device == 'cpu':
-            cmd = f'ffmpeg -ss {start_time} -t {duration} -i {self.path} -vf "setpts=PTS-STARTPTS" {self.codec[1]} -crf 21 -preset ultrafast {self.verbose} -an {self.video_dir}/video_{idx_video}.mkv'
+        if recode:
+            if self.device == 'cpu':
+                cmd = f'ffmpeg -ss {start_time} -t {duration} -i {self.path} -vf "setpts=PTS-STARTPTS" {self.codec[1]} -crf 21 -preset ultrafast {self.verbose} -an {self.video_dir}/video_{idx_video}.mkv'
+            else:
+                cmd = f'ffmpeg {self.codec[1]} -hwaccel cuvid -ss {start_time} -t {duration} -i {self.path} -vf "setpts=PTS-STARTPTS" -c:v h264_nvenc -b:v {self.bitrate_video()}M -preset "hq" {self.verbose} -an -y {self.video_dir}/video_{idx_video}.mkv'
         else:
-            cmd = f'ffmpeg {self.codec[1]} -hwaccel cuvid -ss {start_time} -t {duration} -i {self.path} -vf "setpts=PTS-STARTPTS" -c:v h264_nvenc -b:v {self.bitrate_video()}M -preset "hq" {self.verbose} -an -y {self.video_dir}/video_{idx_video}.mkv'
+            cmd = f'ffmpeg -ss {start_time} -t {duration} -i {self.path} -c:v copy -an {self.verbose} {self.video_dir}/video_{idx_video}.mkv'
         self._call_sp(cmd)
 
     def concat_videos(self) -> None:

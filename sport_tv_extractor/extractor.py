@@ -31,6 +31,7 @@ class ExtractorBroadcast(object):
         img_dir str: Folder, where need to save frames video
         video_dir str: Folder, where need to save video clips
         model_dir str: Folder, where save model for classification images
+        recode: bool
         high_accuracy bool: Do I need to find a certain frame of transition between classes?
         rm_files list: list of bool value
         batch_size int: Batch size images for model
@@ -49,6 +50,7 @@ class ExtractorBroadcast(object):
                  img_dir: str = 'images',
                  video_dir: str = 'video',
                  model_dir: str = 'models',
+                 recode: bool = True,
                  high_accuracy: bool = True,
                  rm_tmp_files: bool = True,
                  batch_size: int = 128,
@@ -63,6 +65,7 @@ class ExtractorBroadcast(object):
         self.img_dir = img_dir
         self.video_dir = video_dir
         self.model_dir = model_dir
+        self.recode = recode
         self.high_accuracy = high_accuracy
         self.rm_files = rm_tmp_files if isinstance(rm_tmp_files, List) else [rm_tmp_files] * 2
         self.batch_size = batch_size
@@ -333,12 +336,13 @@ class ExtractorBroadcast(object):
 
         Args:
             data:
+            recode:
 
         Returns:
 
         """
         for i, row in enumerate(data.df.itertuples()):
-            self.ffmpeg.cut_videos(row.start_time, row.duration, i)
+            self.ffmpeg.cut_videos(row.start_time, row.duration, i, self.recode)
 
         with open(f'{self.video_dir}/file.txt', 'w', encoding='utf-8') as file_desc:
             for i in range(data.df.shape[0]):
