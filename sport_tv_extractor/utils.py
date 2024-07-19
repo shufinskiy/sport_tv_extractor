@@ -11,6 +11,25 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 
 
+def to_real_time(pred_shape: int, second_step: float, fps: int) -> np.ndarray:
+    if second_step >= 1:
+        plus_one = 0 if second_step != 4 else 1
+        if second_step == 1:
+            screen_frame = 24
+        else:
+            screen_frame = 49
+        return np.array(np.arange(stop=pred_shape * second_step, step=second_step) + (screen_frame / fps)) + plus_one
+    else:
+        frame_step = np.floor(np.floor(fps * second_step))
+        if second_step == 0.5:
+            mask = np.array([0, 0])
+        else:
+            mask = np.array([0, 0, 1, 1])
+        v1 = np.tile(np.arange(np.floor(frame_step / 2), fps, frame_step) + mask, int(pred_shape * second_step)) / fps
+        v2 = np.repeat(np.arange(0, int(pred_shape * second_step)), int(1/second_step))
+        return v1 + v2
+
+
 class CustomImageFolder(Dataset):
     """A class for loading images
 
@@ -56,7 +75,7 @@ class ExtractorDF(object):
             pd.DataFrame(softmax(self.prediction, axis=1), columns=['mark_0', 'mark_1'])
         )
 
-    def img_classification_df(self, fps: int) -> None:
+    def img_classification_df(self, second_step: float, fps: int) -> None:
         """Adding time and lag/lead mark information in dataframe
 
         Args:
@@ -68,6 +87,7 @@ class ExtractorDF(object):
         self.df = (
             self.df
             .assign(mark=self.prediction.argmax(axis=1))
+            # .assign(real_time=to_real_time(self.prediction.shape[0], second_step, fps))
             .assign(real_time=lambda df_: np.arange(self.prediction.shape[0]) + (24 / fps))
             .assign(
                 prev_value=lambda df_: df_.mark.shift(1, fill_value=1),

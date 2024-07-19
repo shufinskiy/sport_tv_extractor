@@ -314,7 +314,7 @@ class ExtractorBroadcast(object):
 
         """
         data = ExtractorDF(prediction)
-        data.img_classification_df(self.ffmpeg.fps)
+        data.img_classification_df(self.second_step, self.ffmpeg.fps)
         data.main_camera_parts(self.skip_time)
 
         return data
