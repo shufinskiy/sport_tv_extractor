@@ -335,7 +335,8 @@ class ExtractorBroadcast(object):
 
         """
         screen_frame = 24 if self.second_step == 1 else 49
-        frames = np.array([screen_frame + (self.ffmpeg.fps * self.second_step * i) for i in
+        skip_first_sec = 1 if self.second_step == 4 else 0
+        frames = np.array([(screen_frame + skip_first_sec) + (self.ffmpeg.fps * self.second_step * i) for i in
                            range(np.floor(self.ffmpeg.num_frame / self.ffmpeg.fps / self.second_step).astype(np.int16))])
 
         # frames = np.array([24 + (self.ffmpeg.fps * i) for i in
