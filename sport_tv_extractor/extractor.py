@@ -334,13 +334,17 @@ class ExtractorBroadcast(object):
         Returns:
 
         """
-        frames = np.array([24 + (self.ffmpeg.fps * i) for i in
-                           range(np.floor(self.ffmpeg.num_frame / self.ffmpeg.fps).astype(np.int16))])
+        screen_frame = 24 if self.second_step == 1 else 49
+        frames = np.array([screen_frame + (self.ffmpeg.fps * self.second_step * i) for i in
+                           range(np.floor(self.ffmpeg.num_frame / self.ffmpeg.fps / self.second_step).astype(np.int16))])
+
+        # frames = np.array([24 + (self.ffmpeg.fps * i) for i in
+        #                    range(np.floor(self.ffmpeg.num_frame / self.ffmpeg.fps).astype(np.int16))])
 
         st_fr = data.df.start_index.tolist()
         st_frames = np.array([frames[idx] for idx in st_fr])
         left_frames = np.clip(
-            np.array([np.arange(st_frame - self.ffmpeg.fps + 1, st_frame) for st_frame in st_frames]),
+            np.array([np.arange(st_frame - (self.ffmpeg.fps * self.second_step) + 1, st_frame) for st_frame in st_frames]),
             a_min=0,
             a_max=self.ffmpeg.num_frame - (100 / self.ffmpeg.fps)
         )
@@ -348,7 +352,7 @@ class ExtractorBroadcast(object):
         end_fr = data.df.end_index.tolist()
         end_frames = np.array([frames[idx] for idx in end_fr])
         right_frames = np.clip(
-            np.array([np.arange(st_frame + 1, st_frame + self.ffmpeg.fps) for st_frame in end_frames]),
+            np.array([np.arange(st_frame + 1, st_frame + (self.ffmpeg.fps * self.second_step)) for st_frame in end_frames]),
             a_min=0,
             a_max=self.ffmpeg.num_frame - (100 / self.ffmpeg.fps)
         )

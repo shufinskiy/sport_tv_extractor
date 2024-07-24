@@ -87,8 +87,8 @@ class ExtractorDF(object):
         self.df = (
             self.df
             .assign(mark=self.prediction.argmax(axis=1))
-            # .assign(real_time=to_real_time(self.prediction.shape[0], second_step, fps))
-            .assign(real_time=lambda df_: np.arange(self.prediction.shape[0]) + (24 / fps))
+            .assign(real_time=to_real_time(self.prediction.shape[0], second_step, fps))
+            # .assign(real_time=lambda df_: np.arange(self.prediction.shape[0]) + (24 / fps))
             .assign(
                 prev_value=lambda df_: df_.mark.shift(1, fill_value=1),
                 next_value=lambda df_: df_.mark.shift(-1, fill_value=1)
