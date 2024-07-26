@@ -61,7 +61,8 @@ class ExtractorBroadcast(object):
                  ffmpeg_verbose: str = '-loglevel quiet -stats',
                  model: Optional[models.ResNet] = None,
                  transformation: Optional[transforms.Compose] = None,
-                 prediction: Optional[np.ndarray] = None):
+                 prediction: Optional[np.ndarray] = None,
+                 **kwargs):
         self.path = path
         self.output_name = output_name
         self.skip_time = skip_time
@@ -87,7 +88,8 @@ class ExtractorBroadcast(object):
             logging=self.logging,
             recode=self.recode,
             rm_tmp_image=self.rm_files[0],
-            rm_tmp_video=self.rm_files[1]
+            rm_tmp_video=self.rm_files[1],
+            **kwargs
         )
         self.model = model
         self.transformation = transformation

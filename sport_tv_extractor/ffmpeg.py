@@ -45,7 +45,8 @@ class FFMpeg(object):
                  logging: bool = False,
                  recode: bool = True,
                  rm_tmp_image: bool = True,
-                 rm_tmp_video: bool = True
+                 rm_tmp_video: bool = True,
+                 **kwargs
                  ):
         self.path = path
         self.img_dir = img_dir
@@ -58,10 +59,10 @@ class FFMpeg(object):
         self.recode = recode
         self.rm_img = rm_tmp_image
         self.rm_video = rm_tmp_video
-        self.codec: List[str] = self._get_codec()
-        self.num_frame: Optional[int] = None
-        self.fps: Optional[int] = None
-        self.bitrate: Optional[float] = None
+        self.codec: List[str] = self._get_codec() if kwargs.get("codec", None) is None else kwargs.get("codec")
+        self.num_frame: Optional[int] = kwargs.get("num_frame", None)
+        self.fps: Optional[int] = kwargs.get("fps", None)
+        self.bitrate: Optional[float] = kwargs.get("bitrate", None)
         Path.cwd().joinpath(self.img_dir).mkdir(parents=True, exist_ok=True)
         Path.cwd().joinpath(self.video_dir).mkdir(parents=True, exist_ok=True)
 
