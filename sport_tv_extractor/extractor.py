@@ -3,7 +3,6 @@ import shutil
 from typing import List, Optional, Dict, Any, Union, Callable, Tuple
 
 import numpy as np
-from loguru import logger
 
 import torch
 from torch.utils.data import Dataset
@@ -340,9 +339,6 @@ class ExtractorBroadcast(object):
         skip_first_sec = 1 if self.second_step == 4 else 0
         frames = np.array([(screen_frame + skip_first_sec) + (self.ffmpeg.fps * self.second_step * i) for i in
                            range(np.floor(self.ffmpeg.num_frame / self.ffmpeg.fps / self.second_step).astype(np.int16))])
-
-        # frames = np.array([24 + (self.ffmpeg.fps * i) for i in
-        #                    range(np.floor(self.ffmpeg.num_frame / self.ffmpeg.fps).astype(np.int16))])
 
         st_fr = data.df.start_index.tolist()
         st_frames = np.array([frames[idx] for idx in st_fr])
