@@ -234,3 +234,52 @@ class FFMpeg(object):
 
         """
         sp.call(command, shell=True)
+
+
+def check_cut_frames(path: str, step: int = 1, n_second: int = 12) -> dict[str: list[int | float]]:
+    fps_cmd = sp.Popen(['ffprobe', '-v', 'error', '-select_streams', 'v:0',
+                        '-show_entries', 'stream=avg_frame_rate', '-of',
+                        'default=noprint_wrappers=1:nokey=1',
+                        path], stdout=sp.PIPE)
+    out, err = fps_cmd.communicate()
+    fps = int(out.decode('utf-8').strip('\n').split('/')[0])
+
+    command = ['ffmpeg',
+               '-ss', '00:00:00',
+               '-t', str(n_second),
+               '-c:v', 'h264_cuvid',
+               '-i', path,
+               '-vf', 'scale=224:224',
+               '-f', 'image2pipe',
+               '-pix_fmt', 'rgb24',
+               '-loglevel', 'error',
+               '-hide_banner',
+               '-vcodec', 'rawvideo',
+               '-']
+    pipe_every_frame = sp.Popen(command, stdout=sp.PIPE, bufsize=10 ** 8)
+
+    raw_images = pipe_every_frame.stdout.read(n_second * fps * 224 * 224 * 3)
+    pipe_every_frame.stdout.flush()
+    every_frames = np.frombuffer(raw_images, dtype='uint8').reshape((n_second * fps, 224, 224, 3))
+
+    command[10] = f'fps={1 / step}, scale=224:224'
+
+    pipe_step = sp.Popen(command, stdout=sp.PIPE, bufsize=10 ** 8)
+
+    step_raw_images = pipe_step.stdout.read(int(np.floor(n_second / step) * 224 * 224 * 3))
+    pipe_step.stdout.flush()
+    step_frames = np.frombuffer(step_raw_images, dtype='uint8').reshape((int(np.floor(n_second / step)), 224, 224, 3))
+
+    d = {"num_frame": [], "num_frame_in_sec": [], "time_video": []}
+    cnt = 0
+    for i, frame in enumerate(every_frames):
+        try:
+            diff = np.sum(frame - step_frames[cnt])
+        except IndexError:
+            break
+        if diff == 0:
+            d["num_frame"].append(i)
+            d["num_frame_in_sec"].append(i % fps)
+            d["time_video"].append((i // fps) + (i % fps * 2 / 100))
+            cnt += 1
+    return d
