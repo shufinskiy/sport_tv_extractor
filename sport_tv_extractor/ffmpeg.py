@@ -29,6 +29,8 @@ class FFMpeg(object):
         rm_img bool: Delete temporary frames?
         rm_video bool: Delete temporary video clips?
         codec List[str]:
+        crf int: Constant Rate Factor. The range of the CRF scale is 0–51, where 0 is lossless and 51 is worst quality possible. Only cpu mode
+        preset str: A preset is a collection of options that will provide a certain encoding speed to compression ratio. Only cpu mode. More https://trac.ffmpeg.org/wiki/Encode/H.264
         num_frame Optional[int]:
         fps Optional[int]:
         bitrate Optional[float]: 
@@ -60,6 +62,8 @@ class FFMpeg(object):
         self.rm_img = rm_tmp_image
         self.rm_video = rm_tmp_video
         self.codec: List[str] = self._get_codec() if kwargs.get("codec", None) is None else kwargs.get("codec")
+        self.crf: int =  kwargs.get("crf", 21)
+        self.preset: str = kwargs.get("preset", "ultrafast")
         self.num_frame: Optional[int] = kwargs.get("num_frame", None)
         self.fps: Optional[int] = kwargs.get("fps", None)
         self.bitrate: Optional[float] = kwargs.get("bitrate", None)
@@ -128,7 +132,7 @@ class FFMpeg(object):
         """
         if self.recode:
             if self.device == 'cpu':
-                cmd = f'ffmpeg -ss {start_time} -t {duration} -i {self.path} -vf "setpts=PTS-STARTPTS" {self.codec[1]} -crf 21 -preset ultrafast {self.verbose} -an {self.video_dir}/video_{idx_video}.mkv'
+                cmd = f'ffmpeg -ss {start_time} -t {duration} -i {self.path} -vf "setpts=PTS-STARTPTS" {self.codec[1]} -crf {str(self.crf)} -preset {self.preset} {self.verbose} -an {self.video_dir}/video_{idx_video}.mkv'
             else:
                 cmd = f'ffmpeg {self.codec[1]} -ss {start_time} -t {duration} -i {self.path} -vf "setpts=PTS-STARTPTS" -c:v h264_nvenc -b:v {self.bitrate_video()}M -preset "hq" {self.verbose} -an -y {self.video_dir}/video_{idx_video}.mkv'
         else:
