@@ -3,6 +3,7 @@ import shutil
 from typing import List, Optional, Dict, Any, Union, Callable, Tuple
 
 import numpy as np
+from scipy.special import softmax
 
 import torch
 from torch.utils.data import Dataset
@@ -35,6 +36,7 @@ class ExtractorBroadcast(object):
         recode: bool
         high_accuracy bool: Do I need to find a certain frame of transition between classes?
         rm_files list: list of bool value
+        save_cls_tbl bool: save table with classification frames
         batch_size int: Batch size images for model
         ffmpeg_v str: Level verbose for ffmpeg calls
         ffmpeg FFMpeg: class FFMPeg for working with video
@@ -55,7 +57,8 @@ class ExtractorBroadcast(object):
                  logging: bool = False,
                  recode: bool = True,
                  high_accuracy: bool = True,
-                 rm_tmp_files: bool = True,
+                 rm_tmp_files: List[bool] | bool = True,
+                 save_cls_tbl: bool = False,
                  batch_size: int = 128,
                  ffmpeg_verbose: str = '-loglevel quiet -stats',
                  model: Optional[models.ResNet] = None,
@@ -74,6 +77,7 @@ class ExtractorBroadcast(object):
         self.recode = recode
         self.high_accuracy = high_accuracy
         self.rm_files = rm_tmp_files if isinstance(rm_tmp_files, List) else [rm_tmp_files] * 2
+        self.save_cls_tbl = save_cls_tbl
         self.batch_size = batch_size
         self.ffmpeg_v = ffmpeg_verbose
         self.ffmpeg = FFMpeg(
@@ -93,6 +97,7 @@ class ExtractorBroadcast(object):
         self.model = model
         self.transformation = transformation
         self.prediction = prediction
+        self.kwargs = kwargs
 
     def __repr__(self):
         return f"""ExtractorBroadcast(
@@ -316,6 +321,24 @@ class ExtractorBroadcast(object):
         """
         data = ExtractorDF(prediction)
         data.img_classification_df(self.second_step, self.ffmpeg.fps)
+        if self.save_cls_tbl:
+            tbl = (
+                data.df
+                .assign(
+                    game_name = self.kwargs.get("game_name") if not self.kwargs.get("game_name") is None else Path(self.path).stem,
+                    link_on_source = self.kwargs.get("link_on_source", ""),
+                    probability = np.max(softmax(data.prediction, axis=1), axis=1)
+                )
+                .drop(
+                    columns = ["mark_0", "mark_1", "prev_value", "next_value"]
+                )
+                .pipe(lambda df_: df_.loc[:, ["game_name", "link_on_source", "mark",
+                                              "probability", "real_time"]])
+            )
+            if self.kwargs.get("cls_save_path", None) is not None:
+                tbl.to_csv(self.kwargs.get("cls_save_path"), index=False)
+            else:
+                tbl.to_csv("classification_tbl.csv", index=False)
         data.main_camera_parts(self.skip_time)
 
         return data
